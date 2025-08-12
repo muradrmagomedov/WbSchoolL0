@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Форма заказа</title>
+  </head>
+  <body>
+    <form id="orderForm">
+      <input type="text" name="order_id" required />
+      <button type="submit">Отправить</button>
+    </form>
+    <div id="error" style="color: red"></div>
+    <pre id="result"></pre>
+
+    <script>
+      const form = document.getElementById("orderForm");
+      const errorDiv = document.getElementById("error");
+      const resultPre = document.getElementById("result");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorDiv.textContent = "";
+        resultPre.textContent = "";
+        const order_id = form.order_id.value;
+        try {
+          const response = await fetch("/order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            errorDiv.textContent = data.error || "Ошибка с сервера";
+          } else {
+            resultPre.textContent = JSON.stringify(data, null, 2);
+          }
+        } catch {
+          errorDiv.textContent = "Ошибка сети";
+        }
+      });
+    </script>
+  </body>
+</html>
