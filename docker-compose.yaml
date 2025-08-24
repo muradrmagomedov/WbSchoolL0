@@ -1,5 +1,14 @@
 version: "3.8"
 services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: root
+    ports:
+      - "5431:5432"
   zookeeper:
     image: bitnami/zookeeper:latest
     restart: on-failure

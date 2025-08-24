@@ -1,0 +1,20 @@
+app_name: "MyApp"
+addr: "localhost:8001"
+debug: true
+database:
+  host: "localhost"
+  port: 5431
+  username: "root"
+  password: "secret"
+  dbname: "root"
+redis:
+  addr: "localhost:6379"
+  password: ""
+  dbname: 0
+  orders_to_fill: "15"
+  cache_time_in_min: 10
+kafka:
+  addr: "localhost:9092"
+  topic: "my-topic"
+  partition: 0
+  group_ud: "group_id"

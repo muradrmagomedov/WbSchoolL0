@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 
+	faker "github.com/brianvoe/gofakeit/v7"
 	entities "github.com/muradrmagomedov/wbstestproject"
 )
 
@@ -24,44 +25,44 @@ func rightMessage() string {
 
 func generatePayment() entities.Payment {
 	payment := entities.Payment{
-		RequestID:    getRandomString(6),
-		Currency:     "usd",
-		Provider:     getRandomString(5),
-		Amount:       getRandomNumber(),
-		PaymentDt:    getRandomNumber(),
-		Bank:         "WB",
-		DeliveryCost: getRandomNumber(),
-		GoodsTotal:   getRandomNumber(),
-		CustomFee:    getRandomNumber(),
+		RequestID:    faker.LetterN(6),
+		Currency:     faker.Currency().Short,
+		Provider:     faker.LetterN(5),
+		Amount:       faker.Number(0, 100000),
+		PaymentDt:    faker.Number(0, 100000),
+		Bank:         faker.BankName(),
+		DeliveryCost: faker.Number(0, 100000),
+		GoodsTotal:   faker.Number(0, 100000),
+		CustomFee:    faker.Number(0, 100000),
 	}
 	return payment
 }
 
 func generateDelivery() entities.Delivery {
 	delivery := entities.Delivery{
-		Name:    "John Dow",
-		Phone:   "+799999999999",
-		Zip:     getRandomString(6),
-		City:    getRandomString(10),
-		Address: getRandomString(15),
-		Region:  getRandomString(15),
-		Email:   "123@mail.ru",
+		Name:    faker.Name(),
+		Phone:   faker.Phone(),
+		Zip:     faker.Zip(),
+		City:    faker.City(),
+		Address: faker.Address().Address,
+		Region:  faker.Address().Country,
+		Email:   faker.Email(),
 	}
 	return delivery
 }
 
 func generateItem() entities.Item {
 	item := entities.Item{
-		ChartID:    getRandomNumber(),
-		Price:      getRandomNumber(),
-		RId:        getRandomString(10),
-		Name:       getRandomString(10),
-		Sale:       getRandomNumber(),
-		Size:       getRandomString(10),
-		TotalPrice: getRandomNumber(),
-		NmId:       getRandomNumber(),
-		Brand:      getRandomString(10),
-		Status:     getRandomNumber(),
+		ChartID:    faker.Number(0, 100000),
+		Price:      faker.Number(0, 100000),
+		RId:        faker.LetterN(10),
+		Name:       faker.ProductName(),
+		Sale:       faker.Number(0, 1000),
+		Size:       faker.LetterN(10),
+		TotalPrice: faker.Number(0, 1000),
+		NmId:       faker.Number(0, 100000),
+		Brand:      faker.LetterN(10),
+		Status:     faker.Number(0, 10),
 	}
 	return item
 }
@@ -69,18 +70,18 @@ func generateOrder() entities.Order {
 	items := []entities.Item{}
 
 	order := entities.Order{
-		OrderUID:          getUID(),
-		TrackNumber:       getUID(),
-		Entry:             getRandomString(10),
+		OrderUID:          faker.LetterN(15),
+		TrackNumber:       faker.LetterN(15),
+		Entry:             faker.LetterN(10),
 		Delivery:          generateDelivery(),
 		Payment:           generatePayment(),
-		Locale:            getRandomString(3),
-		InternalSignature: getRandomString(10),
-		CustomerID:        getRandomString(10),
-		DeliveryService:   getRandomString(10),
-		ShardKey:          getRandomString(10),
-		SmID:              getRandomNumber(),
-		OofShard:          getRandomString(10),
+		Locale:            faker.LetterN(3),
+		InternalSignature: faker.LetterN(10),
+		CustomerID:        faker.LetterN(10),
+		DeliveryService:   faker.LetterN(10),
+		ShardKey:          faker.LetterN(10),
+		SmID:              faker.Number(0, 100000),
+		OofShard:          faker.LetterN(10),
 	}
 
 	for range rand.Intn(5) + 1 {

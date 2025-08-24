@@ -6,32 +6,56 @@ import (
 	"log"
 
 	entities "github.com/muradrmagomedov/wbstestproject"
-	"github.com/muradrmagomedov/wbstestproject/storage/postgresqldb"
+	"github.com/muradrmagomedov/wbstestproject/storage/postgresql"
 	"github.com/segmentio/kafka-go"
+	"github.com/spf13/viper"
 )
 
-var (
-	topic     = "my-topic"
-	partition = 0
-)
-
-type Consumer struct{}
-
-func NewConsumer() *Consumer {
-	return &Consumer{}
+type KafkaConsumer struct {
+	Conn *kafka.Reader
 }
 
-func (c Consumer) ReadMessage(db postgresqldb.PostgresqlDB) {
+func NewConsumer() *KafkaConsumer {
+	return &KafkaConsumer{}
+}
+
+type ConsumerConfig struct {
+	Addr      string
+	Topic     string
+	Partition int
+	GroupID   string
+}
+
+func createConfig() ConsumerConfig {
+	return ConsumerConfig{
+		Addr:      viper.GetString("kafka.addr"),
+		Topic:     viper.GetString("kafka.topic"),
+		Partition: viper.GetInt("kafka.partition"),
+		GroupID:   viper.GetString("kafka.group_ud"),
+	}
+}
+
+func (c *KafkaConsumer) ReadMessage(db postgresql.DB) {
+	config := createConfig()
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   []string{"localhost:9092"},
-		Topic:     topic,
-		Partition: partition,
+		Brokers:   []string{config.Addr},
+		Topic:     config.Topic,
+		Partition: config.Partition,
+		GroupID:   config.GroupID,
 	})
+	c.Conn = reader
+	ctx := context.Background()
 	for {
-		m, err := reader.ReadMessage(context.Background())
+		m, err := reader.ReadMessage(ctx)
 		if err != nil {
 			break
 		}
+		log.Printf("offset of message:%v", m.Offset)
+		err = reader.CommitMessages(ctx, m)
+		if err != nil {
+			log.Printf("couldn't commit message:%v", err.Error())
+		}
+
 		order := entities.Order{}
 		err = json.Unmarshal(m.Value, &order)
 		if err != nil {

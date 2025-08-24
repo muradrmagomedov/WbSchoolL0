@@ -7,24 +7,38 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"github.com/spf13/viper"
 )
 
-var (
-	topic     = "my-topic"
-	partition = 0
-)
-
-type Producer struct{}
-
-func NewProducer() *Producer {
-	return &Producer{}
+type KafkaProducer struct {
+	Conn *kafka.Conn
 }
 
-func (p Producer) KafkaDialler() {
-	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", topic, partition)
+func NewProducer() *KafkaProducer {
+	return &KafkaProducer{}
+}
+
+type ProducerConfig struct {
+	Addr      string
+	Topic     string
+	Partition int
+}
+
+func createConfig() ProducerConfig {
+	return ProducerConfig{
+		Addr:      viper.GetString("kafka.addr"),
+		Topic:     viper.GetString("kafka.topic"),
+		Partition: viper.GetInt("kafka.partition"),
+	}
+}
+
+func (p *KafkaProducer) KafkaDialler() {
+	config := createConfig()
+	conn, err := kafka.DialLeader(context.Background(), "tcp", config.Addr, config.Topic, config.Partition)
 	if err != nil {
 		log.Fatal("Fatal to create dialLeader", err)
 	}
+	p.Conn = conn
 	kfkMsg := kafka.Message{}
 	if rand.Intn(10) > 3 {
 		kfkMsg.Value = []byte(wrongMessage())
@@ -39,5 +53,8 @@ func (p Producer) KafkaDialler() {
 	if err != nil {
 		log.Fatal("Failed to write message to kafka", err)
 	}
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		log.Printf("problems when closing kafka dialer:%s", err.Error())
+	}
 }

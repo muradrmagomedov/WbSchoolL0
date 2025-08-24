@@ -1,4 +1,4 @@
-package redisDB
+package redis
 
 import (
 	"context"
@@ -8,33 +8,56 @@ import (
 	"time"
 
 	entities "github.com/muradrmagomedov/wbstestproject"
-	"github.com/muradrmagomedov/wbstestproject/storage/postgresqldb"
+	"github.com/muradrmagomedov/wbstestproject/storage/postgresql"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 )
 
-type RedisDB struct {
-	postgresDB  *postgresqldb.PostgresqlDB
-	redisClient *redis.Client
+var cacheTime time.Duration
+var ordersToFill string
+
+type DB struct {
+	postgresDB   *postgresql.DB
+	RedisClient  *redis.Client
+	OrdersToFill string
 }
 
-func NewRedis(postgresDB *postgresqldb.PostgresqlDB) *RedisDB {
+type Config struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
+func createConfig() Config {
+	return Config{
+		Addr:     viper.GetString("redis.addr"),
+		Password: viper.GetString("redis.password"),
+		DB:       viper.GetInt("redis.dbname"),
+	}
+}
+
+func NewRedis(postgresDB *postgresql.DB) *DB {
+	config := createConfig()
+	setCacheTime()
+	setOrderToFill()
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
+		Addr:     config.Addr,
+		Password: config.Password,
+		DB:       config.DB,
 	})
 	_, err := rdb.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatal("Ошибка подключения к Redis:", err)
 	}
-	return &RedisDB{
-		redisClient: rdb,
-		postgresDB:  postgresDB,
+	return &DB{
+		RedisClient:  rdb,
+		postgresDB:   postgresDB,
+		OrdersToFill: ordersToFill,
 	}
 }
 
-func (r *RedisDB) SetupDB() error {
-	orders, err := r.postgresDB.GetOrders("15", context.Background())
+func (r *DB) SetupDB() error {
+	orders, err := r.postgresDB.GetOrders(ordersToFill, context.Background())
 	if err != nil {
 		return err
 	}
@@ -43,7 +66,7 @@ func (r *RedisDB) SetupDB() error {
 		if err != nil {
 			log.Printf("problem with writing to redis:%v\n", err.Error())
 		}
-		_, err = r.redisClient.Set(context.Background(), order.OrderUID, buf, 10*time.Minute).Result()
+		_, err = r.RedisClient.Set(context.Background(), order.OrderUID, buf, cacheTime).Result()
 		if err != nil {
 			log.Printf("problem with writing to redis:%v\n", err.Error())
 		}
@@ -52,9 +75,9 @@ func (r *RedisDB) SetupDB() error {
 	return nil
 }
 
-func (r *RedisDB) GetOrderByUID(orderUID string, ctx context.Context) (entities.Order, error) {
+func (r *DB) GetOrderByUID(orderUID string, ctx context.Context) (entities.Order, error) {
 	order := entities.Order{}
-	val, err := r.redisClient.Get(ctx, orderUID).Result()
+	val, err := r.RedisClient.Get(ctx, orderUID).Result()
 	if err != nil {
 		return order, err
 	}
@@ -64,4 +87,25 @@ func (r *RedisDB) GetOrderByUID(orderUID string, ctx context.Context) (entities.
 	}
 	log.Println("got order from redis")
 	return order, nil
+}
+
+func (r *DB) AddOrder(order entities.Order, ctx context.Context) error {
+	buf, err := json.Marshal(order)
+	if err != nil {
+		return err
+	}
+	_, err = r.RedisClient.Set(context.Background(), order.OrderUID, buf, cacheTime).Result()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setCacheTime() {
+	cT := viper.GetInt("redis.cache_time_in_min")
+	cacheTime = time.Minute * time.Duration(cT)
+}
+
+func setOrderToFill() {
+	ordersToFill = viper.GetString("redis.orders_to_fill")
 }

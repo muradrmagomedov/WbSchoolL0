@@ -1,4 +1,4 @@
-package postgresqldb
+package postgresql
 
 import (
 	"context"
@@ -9,26 +9,39 @@ import (
 
 	_ "github.com/lib/pq"
 	entities "github.com/muradrmagomedov/wbstestproject"
+	"github.com/spf13/viper"
 )
 
-const (
-	host     = "localhost"
-	port     = 5431
-	user     = "root"
-	password = "secret"
-	dbname   = "root"
-)
-
-type PostgresqlDB struct {
-	db *sql.DB
+type dbConnectionConfig struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	Dbname   string
 }
 
-func NewPostgresqlDB() *PostgresqlDB {
-	return &PostgresqlDB{}
+type DB struct {
+	DB *sql.DB
 }
 
-func (p *PostgresqlDB) Connection() error {
-	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+func NewPostgresqlDB() *DB {
+	return &DB{}
+}
+
+func (p *DB) createConfig() dbConnectionConfig {
+	return dbConnectionConfig{
+		Host:     viper.GetString("database.host"),
+		Port:     viper.GetInt("database.port"),
+		Username: viper.GetString("database.username"),
+		Password: viper.GetString("database.password"),
+		Dbname:   viper.GetString("database.dbname"),
+	}
+}
+
+func (p *DB) Connection() error {
+	config := p.createConfig()
+	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", config.Host, config.Port, config.Username, config.Password, config.Dbname)
+
 	db, err := sql.Open("postgres", connString)
 	if err != nil {
 		return fmt.Errorf("cant connect to postgres database: %v", err.Error())
@@ -37,23 +50,23 @@ func (p *PostgresqlDB) Connection() error {
 	if err != nil {
 		return fmt.Errorf("cant ping postgres database: %v", err.Error())
 	}
-	p.db = db
+	p.DB = db
 	return nil
 }
 
-func (p *PostgresqlDB) ParseMessage(order string) (entities.Order, error) {
+func (p *DB) ParseMessage(order string) (entities.Order, error) {
 	orderStruct := entities.Order{}
 	err := json.Unmarshal([]byte(order), &orderStruct)
 	return orderStruct, err
 }
 
-func (p *PostgresqlDB) AddOrder(order entities.Order, ctx context.Context) {
+func (p *DB) AddOrder(order entities.Order, ctx context.Context) {
 	queryDelivery := `Insert into delivery(order_uid,name,phone,zip,city,address,region,email) VALUES ($1,$2,$3,$4,$5,$6,$7,$8);`
 	queryPayment := `Insert into payment(transaction,request_id,currency,provider,amount,payment_dt,bank,delivery_cost,goods_total,custom_fee) Values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10);`
 	queryItem := `Insert into items(chrt_id,track_number,price,rid,name,sale,size,total_price,nm_id,brand,status) Values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11);`
 	queryOrder := `Insert into orders(order_uid,track_number,entry,locale,internal_signature,customer_id,delivery_service,shardkey,sm_id,oof_shard) Values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
 
-	tx, err := p.db.BeginTx(ctx, nil)
+	tx, err := p.DB.BeginTx(ctx, nil)
 	if err != nil {
 		log.Printf("error while starting transaction:%v\n", err.Error())
 		return
@@ -104,12 +117,12 @@ func (p *PostgresqlDB) AddOrder(order entities.Order, ctx context.Context) {
 	}
 }
 
-func (p *PostgresqlDB) GetOrderByUID(orderUID string, ctx context.Context) (entities.Order, error) {
+func (p *DB) GetOrderByUID(orderUID string, ctx context.Context) (entities.Order, error) {
 	order := entities.Order{}
 	query := `select order_uid,track_number,entry,locale,internal_signature,customer_id,delivery_service,shardkey,sm_id,date_created,oof_shard from orders where order_uid=$1;`
-	err := p.db.QueryRowContext(ctx, query, orderUID).Scan(&order.OrderUID, &order.TrackNumber, &order.Entry, &order.Locale, &order.InternalSignature, &order.CustomerID, &order.DeliveryService, &order.ShardKey, &order.SmID, &order.DateCreated, &order.OofShard)
+	err := p.DB.QueryRowContext(ctx, query, orderUID).Scan(&order.OrderUID, &order.TrackNumber, &order.Entry, &order.Locale, &order.InternalSignature, &order.CustomerID, &order.DeliveryService, &order.ShardKey, &order.SmID, &order.DateCreated, &order.OofShard)
 	if err != nil {
-		return order, fmt.Errorf("error while getting order from db:%v", err.Error())
+		return order, err
 	}
 	delivery, err := p.GetDelivery(orderUID, ctx)
 	if err != nil {
@@ -130,34 +143,38 @@ func (p *PostgresqlDB) GetOrderByUID(orderUID string, ctx context.Context) (enti
 	return order, nil
 }
 
-func (p *PostgresqlDB) GetDelivery(orderUID string, ctx context.Context) (entities.Delivery, error) {
+func (p *DB) GetDelivery(orderUID string, ctx context.Context) (entities.Delivery, error) {
 	delivery := entities.Delivery{}
 	query := `select name,phone,zip,city,address,region,email from delivery where order_uid=$1;`
-	err := p.db.QueryRowContext(ctx, query, orderUID).Scan(&delivery.Name, &delivery.Phone, &delivery.Zip, &delivery.City, &delivery.Address, &delivery.Region, &delivery.Email)
+	err := p.DB.QueryRowContext(ctx, query, orderUID).Scan(&delivery.Name, &delivery.Phone, &delivery.Zip, &delivery.City, &delivery.Address, &delivery.Region, &delivery.Email)
 	if err != nil {
 		return delivery, fmt.Errorf("error while getting delivery from db:%v", err.Error())
 	}
 	return delivery, nil
 }
 
-func (p *PostgresqlDB) GetPayment(orderUID string, ctx context.Context) (entities.Payment, error) {
+func (p *DB) GetPayment(orderUID string, ctx context.Context) (entities.Payment, error) {
 	payment := entities.Payment{}
 	query := `select transaction,request_id,currency,provider,amount,payment_dt,bank,delivery_cost,goods_total,custom_fee from payment where transaction=$1;`
-	err := p.db.QueryRowContext(ctx, query, orderUID).Scan(&payment.Transaction, &payment.RequestID, &payment.Currency, &payment.Provider, &payment.Amount, &payment.PaymentDt, &payment.Bank, &payment.DeliveryCost, &payment.GoodsTotal, &payment.CustomFee)
+	err := p.DB.QueryRowContext(ctx, query, orderUID).Scan(&payment.Transaction, &payment.RequestID, &payment.Currency, &payment.Provider, &payment.Amount, &payment.PaymentDt, &payment.Bank, &payment.DeliveryCost, &payment.GoodsTotal, &payment.CustomFee)
 	if err != nil {
 		return payment, fmt.Errorf("error while getting payment from db:%v", err.Error())
 	}
 	return payment, nil
 }
 
-func (p *PostgresqlDB) GetItems(trackNumber string, ctx context.Context) ([]entities.Item, error) {
+func (p *DB) GetItems(trackNumber string, ctx context.Context) ([]entities.Item, error) {
 	items := []entities.Item{}
 	query := `select chrt_id,track_number,price,rid,name,sale,size,total_price,nm_id,brand,status from items where track_number=$1;`
-	rows, err := p.db.QueryContext(ctx, query, trackNumber)
+	rows, err := p.DB.QueryContext(ctx, query, trackNumber)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting items from db:%v", err.Error())
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("problems while closing db.rows connection:%s", err.Error())
+		}
+	}()
 	for rows.Next() {
 		var item entities.Item
 		err := rows.Scan(&item.ChartID, &item.TrackNumber, &item.Price, &item.RId, &item.Name, &item.Sale, &item.Size, &item.TotalPrice, &item.NmId, &item.Brand, &item.Status)
@@ -172,15 +189,19 @@ func (p *PostgresqlDB) GetItems(trackNumber string, ctx context.Context) ([]enti
 	return items, nil
 }
 
-func (p *PostgresqlDB) GetOrders(Limit string, ctx context.Context) ([]entities.Order, error) {
+func (p *DB) GetOrders(Limit string, ctx context.Context) ([]entities.Order, error) {
 	orders := []entities.Order{}
 	query := `select order_uid,track_number,entry,locale,internal_signature,customer_id,delivery_service,shardkey,sm_id,date_created,oof_shard from orders ORDER BY id DESC Limit $1;`
 
-	rows, err := p.db.QueryContext(ctx, query, Limit)
+	rows, err := p.DB.QueryContext(ctx, query, Limit)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting orders from db:%v", err.Error())
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("problems while closing db.rows connection:%s", err.Error())
+		}
+	}()
 	for rows.Next() {
 		var order entities.Order
 		err := rows.Scan(&order.OrderUID, &order.TrackNumber, &order.Entry, &order.Locale, &order.InternalSignature, &order.CustomerID, &order.DeliveryService, &order.ShardKey, &order.SmID, &order.DateCreated, &order.OofShard)
