@@ -49,8 +49,8 @@ make run
 
 ## Дополнительные UI для сервисов:
 
-Redis Insight (просмотр Redis): `http://localhost:5540`
-Kowl (просмотр сообщений Kafka): `http://localhost:8080`
+- Redis Insight (просмотр Redis): `http://localhost:5540`
+- Kowl (просмотр сообщений Kafka): `http://localhost:8080`
 
 ## Описание пакетов:
 
